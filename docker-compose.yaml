@@ -1,6 +1,26 @@
+# https://asynchronous.in/docker-mailman/
+
 version: '2'
 
 services:
+
+  #---------------------------------------------
+  # NGINX -
+  #---------------------------------------------
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 80:80
+      - 443:443
+    networks:
+      mailman:
+
+  #---------------------------------------------
+  # MAILMAN - CORE
+  #---------------------------------------------
   mailman-core:
     image: maxking/mailman-core:0.3
     container_name: mailman-core
@@ -13,6 +33,7 @@ services:
     depends_on:
     - database
     environment:
+    # https://docs.mailman3.org/projects/mailman/en/latest/src/mailman/docs/database.html
     - DATABASE_URL=postgres://mailman:mailmanpass@database/mailmandb
     - DATABASE_TYPE=postgres
     - DATABASE_CLASS=mailman.database.postgresql.PostgreSQLDatabase
@@ -23,6 +44,9 @@ services:
     networks:
       mailman:
 
+  #---------------------------------------------
+  # MAILMAN - WEB
+  #---------------------------------------------
   mailman-web:
     image: maxking/mailman-web:0.3
     container_name: mailman-web
@@ -38,12 +62,40 @@ services:
     - DATABASE_TYPE=postgres
     - DATABASE_URL=postgres://mailman:mailmanpass@database/mailmandb
     - HYPERKITTY_API_KEY=someapikey
-    ports:
-    - "127.0.0.1:8000:8000" # HTTP
-    - "127.0.0.1:8080:8080" # uwsgi
+    - SERVE_FROM_DOMAIN=mailman.derekzoladz.com
+    - MAILMAN_ADMIN_USER=admin
+    - MAILMAN_ADMIN_EMAIL=admin@example.com
+    - SECRET_KEY=75ntiw47heghfcitgeicgny
+    - UWSGI_STATIC_MAP=/static=/opt/mailman-web-data/static
+    # ---------------------------
+    # DEFAULTS MADE EXPLICIT, REST API
+    # ---------------------------
+    - MAILMAN_REST_URL=http://mailman-core:8001 # Default = http://mailman-core:8001
+    - MAILMAN_REST_USER=restadmin # Default = restadmin
+    - MAILMAN_REST_PASSWORD=restpass # Default = restpass
+    - MAILMAN_HOSTNAME=mailman-core # Default = mailman-core
+    # ---------------------------
+    # DEFAULTS MADE EXPLICIT, SMTP
+    # IP Address/hostname from which you will be sending emails
+    # ---------------------------
+    #SMTP_HOST=  # Default value is the container's gateway retrieved from: /sbin/ip route | awk '/default/ { print $3 }'
+    - SMTP_PORT=25 # Default = 25
+    - SMTP_HOST_USER= # Default = empty string
+    - SMTP_HOST_PASSWORD= # Default = empty string
+    - SMTP_USE_TLS=False # Default = False
+    - SMTP_USE_SSL=False # Default = False
+    #ports:
+    #- "127.0.0.1:8000:8000" # HTTP
+    #- "127.0.0.1:8080:8080" # uwsgi
+    expose:
+      - 8000
+      - 8080
     networks:
       mailman:
 
+  #---------------------------------------------
+  # POSTGRES DATABASE
+  #---------------------------------------------
   database:
     environment:
     - POSTGRES_DB=mailmandb
